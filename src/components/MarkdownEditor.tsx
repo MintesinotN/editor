@@ -3,103 +3,108 @@
 import { useState, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Pluggable } from 'unified';
-import { EditorProps } from '@/types';
 import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export default function MarkdownEditor() {
-  const [markdown, setMarkdown] = useState<string>(`# Welcome to Markdown Editor
+  const [markdown, setMarkdown] = useState('# Welcome to the Markdown Editor\n\nType your Markdown here and see it rendered on the right!');
+  const markdownRef = useRef<HTMLDivElement>(null);
 
-Type your **Markdown** here and see it rendered in real-time on the right!
-
-## Features
-- Real-time preview
-- GitHub Flavored Markdown
-- Modern, responsive UI
-- Supports headers, lists, code blocks, and more
-
-Try typing some Markdown below:
-
-\`\`\`javascript
-const hello = () => {
-  console.log("Hello, Markdown!");
-};
-\`\`\`
-`);
-
-  const previewRef = useRef<HTMLDivElement>(null);
-
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setMarkdown(e.target.value);
-  };
-
-  const copyToClipboard = () => {
-    if (previewRef.current) {
-      const htmlContent = previewRef.current.innerHTML;
-      navigator.clipboard.writeText(htmlContent).then(() => {
-        alert('Rich text copied to clipboard!');
+  const handleCopy = () => {
+    if (markdownRef.current) {
+      const text = markdownRef.current.textContent || '';
+      navigator.clipboard.writeText(text).then(() => {
+        // alert('Rendered text copied to clipboard!');
       }).catch((err) => {
-        console.error('Failed to copy: ', err);
-        alert('Failed to copy to clipboard.');
+        console.error('Failed to copy text:', err);
+        alert('Failed to copy text. Please try again.');
       });
     }
   };
 
-  const exportToPDF = () => {
-    if (previewRef.current) {
-      const doc = new jsPDF({
-        orientation: 'portrait',
-        unit: 'pt',
-        format: 'a4',
-      });
-      doc.html(previewRef.current, {
-        callback: (pdf) => {
-          pdf.save('markdown-export.pdf');
-        },
-        x: 40,
-        y: 40,
-        width: 515, // A4 width in pt (595) - margins
-        windowWidth: 595, // Match A4 width for consistent rendering
-      });
+  const handleExport = async () => {
+    if (markdownRef.current) {
+      try {
+        // Clone the rendered Markdown content
+        const clonedElement = markdownRef.current.cloneNode(true) as HTMLElement;
+        // Remove Tailwind classes and apply simple RGB styles
+        clonedElement.className = '';
+        clonedElement.style.backgroundColor = 'rgb(255, 255, 255)';
+        clonedElement.style.color = 'rgb(0, 0, 0)';
+        clonedElement.style.padding = '16px';
+        clonedElement.style.fontFamily = 'Inter, sans-serif';
+        clonedElement.style.fontSize = '16px';
+        // Remove classes from child elements to avoid oklch
+        const removeClasses = (element: HTMLElement) => {
+          element.className = '';
+          Array.from(element.children).forEach((child) =>
+            removeClasses(child as HTMLElement)
+          );
+        };
+        removeClasses(clonedElement);
+
+        // Append to a hidden container
+        const tempContainer = document.createElement('div');
+        tempContainer.style.position = 'absolute';
+        tempContainer.style.left = '-9999px';
+        tempContainer.style.backgroundColor = 'rgb(255, 255, 255)';
+        tempContainer.appendChild(clonedElement);
+        document.body.appendChild(tempContainer);
+
+        const canvas = await html2canvas(tempContainer, { scale: 2 });
+        document.body.removeChild(tempContainer);
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'px',
+          format: 'a4',
+        });
+        const imgWidth = pdf.internal.pageSize.getWidth() - 20;
+        const imgHeight = (canvas.height * imgWidth) / canvas.width;
+        pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
+        pdf.save('markdown-output.pdf');
+      } catch (err) {
+        console.error('Failed to export PDF:', err);
+        alert('Failed to export PDF. Please try again.');
+      }
     }
   };
 
   return (
-    <div className="container mx-auto p-4 h-screen flex flex-col">
-      <h1 className="text-3xl font-bold text-center mb-6 text-gray-800">
-        Real-Time Markdown Editor
-      </h1>
-      <div className="flex-1 flex flex-col md:flex-row gap-4">
-        {/* Editor Pane */}
-        <div className="w-full md:w-1/2">
-          <textarea
-            className="w-full h-full p-4 border rounded-lg shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none font-mono text-sm"
-            value={markdown}
-            onChange={handleChange}
-            placeholder="Type your Markdown here..."
-            aria-label="Markdown input"
-          />
-        </div>
-        {/* Preview Pane */}
-        <div className="w-full md:w-1/2 p-4 border rounded-lg shadow-sm bg-white overflow-auto">
-          <div className="flex justify-end mb-2 gap-2">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 text-white flex flex-col">
+      <header className="bg-gray-900/80 backdrop-blur-md p-4 sticky top-0 z-10 shadow-lg">
+        <h1 className="text-3xl font-bold tracking-tight">Markdown Studio</h1>
+      </header>
+      <div className="flex-1 flex justify-center items-center p-6">
+        <div className="w-full max-w-4xl flex flex-col gap-6">
+          <div className="flex justify-end gap-3 mb-4">
             <button
-              onClick={copyToClipboard}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 transition"
+              onClick={handleCopy}
+              className="bg-indigo-600 text-white px-5 py-2 rounded-full hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-all duration-200 shadow-md"
             >
               Copy
             </button>
             <button
-              onClick={exportToPDF}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 transition"
+              onClick={handleExport}
+              className="bg-emerald-600 text-white px-5 py-2 rounded-full hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400 transition-all duration-200 shadow-md"
             >
               Export
             </button>
           </div>
-          <div className="markdown-body" ref={previewRef}>
-            <ReactMarkdown remarkPlugins={[remarkGfm as Pluggable]}>
-              {markdown}
-            </ReactMarkdown>
+          <div className="flex flex-col md:flex-row gap-6">
+            <textarea
+              className="w-full md:w-1/2 h-[60vh] max-h-[600px] p-6 bg-gray-800/90 border border-gray-600 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 text-white placeholder-gray-400 transition-all duration-300 shadow-md animate-fade-in"
+              value={markdown}
+              onChange={(e) => setMarkdown(e.target.value)}
+              placeholder="Type your Markdown here..."
+            />
+            <div
+              ref={markdownRef}
+              className="w-full md:w-1/2 h-[60vh] max-h-[600px] p-6 bg-gray-800/90 border border-gray-600 rounded-xl overflow-auto prose prose-invert prose-lg shadow-md animate-fade-in"
+            >
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+            </div>
           </div>
         </div>
       </div>
